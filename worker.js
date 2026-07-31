@@ -27,96 +27,157 @@ const CORS_HEADERS = {
 
 export default {
   async fetch(request, env) {
-
-    // CORS preflight
+    // ── Handle CORS preflight ──────────────────────────────────
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
+
+    // ── Ensure D1 binding exists ───────────────────────────────
+    if (!env.DB) {
+      return jsonResponse({ error: "Database binding not configured" }, 500);
+    }
+
+    // ── Initialise table if it doesn't exist yet ───────────────
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS waitlist (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, phone TEXT NOT NULL, source TEXT DEFAULT 'website', created_at TEXT DEFAULT (datetime('now')))").run();
 
     const url    = new URL(request.url);
     const path   = url.pathname;
     const method = request.method;
 
-    try {
-
-      // Health check — test DB is reachable too
-      if (path === "/api/health" && method === "GET") {
-        await env.DB.exec(`
-          CREATE TABLE IF NOT EXISTS waitlist (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT NOT NULL,
-            email      TEXT NOT NULL UNIQUE,
-            phone      TEXT NOT NULL,
-            source     TEXT DEFAULT 'website',
-            created_at TEXT DEFAULT (datetime('now'))
-          )
-        `);
-        return jsonResponse({ status: "ok" });
-      }
-
-      // POST /api/waitlist — save entry
-      if (path === "/api/waitlist" && method === "POST") {
-        let body;
-        try {
-          body = await request.json();
-        } catch {
-          return jsonResponse({ error: "Invalid JSON" }, 400);
-        }
-
-        const { name, email, phone } = body;
-
-        if (!name  || name.trim().length  < 1) return jsonResponse({ error: "name is required" }, 400);
-        if (!email || !email.includes("@"))     return jsonResponse({ error: "valid email is required" }, 400);
-        if (!phone || phone.trim().length  < 1) return jsonResponse({ error: "phone is required" }, 400);
-
-        // Create table if not exists
-        await env.DB.exec(`
-          CREATE TABLE IF NOT EXISTS waitlist (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT NOT NULL,
-            email      TEXT NOT NULL UNIQUE,
-            phone      TEXT NOT NULL,
-            source     TEXT DEFAULT 'website',
-            created_at TEXT DEFAULT (datetime('now'))
-          )
-        `);
-
-        try {
-          const result = await env.DB.prepare(`
-            INSERT INTO waitlist (name, email, phone, source)
-            VALUES (?, ?, ?, 'website')
-          `).bind(name.trim(), email.trim().toLowerCase(), phone.trim()).run();
-
-          return jsonResponse({ success: true, id: result.meta.last_row_id }, 201);
-
-        } catch (err) {
-          if (err.message && err.message.includes("UNIQUE")) {
-            return jsonResponse({ error: "This email is already on the waitlist" }, 409);
-          }
-          throw err;
-        }
-      }
-
-      // GET /api/waitlist — list all (admin)
-      if (path === "/api/waitlist" && method === "GET") {
-        if (!isAuthorized(request, env)) return jsonResponse({ error: "Unauthorized" }, 401);
-        const rows = await env.DB.prepare(`
-          SELECT * FROM waitlist ORDER BY created_at DESC
-        `).all();
-        return jsonResponse({ entries: rows.results, total: rows.results.length });
-      }
-
-      return jsonResponse({ error: "Not found" }, 404);
-
-    } catch (err) {
-      console.error("Worker error:", err.message);
-      return jsonResponse({ error: "Worker error: " + err.message }, 500);
+    // ── Route: GET /api/health ─────────────────────────────────
+    if (path === "/api/health" && method === "GET") {
+      return jsonResponse({ status: "ok", service: "LabReach Waitlist API" });
     }
+
+    // ── Route: POST /api/waitlist ──────────────────────────────
+    if (path === "/api/waitlist" && method === "POST") {
+      return handleSubmit(request, env);
+    }
+
+    // ── Routes below are admin-protected ──────────────────────
+    if (path === "/api/waitlist" && method === "GET") {
+      if (!isAuthorized(request, env)) return unauthorized();
+      return handleList(url, env);
+    }
+
+    if (path.startsWith("/api/waitlist/") && method === "GET") {
+      if (!isAuthorized(request, env)) return unauthorized();
+      const id = path.split("/api/waitlist/")[1];
+      return handleGetOne(id, env);
+    }
+
+    if (path.startsWith("/api/waitlist/") && method === "DELETE") {
+      if (!isAuthorized(request, env)) return unauthorized();
+      const id = path.split("/api/waitlist/")[1];
+      return handleDelete(id, env);
+    }
+
+    return jsonResponse({ error: "Not found" }, 404);
   }
 };
 
+// ── POST /api/waitlist ─────────────────────────────────────────
+async function handleSubmit(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { name, email, phone } = body;
+
+  // Insert into D1
+  try {
+    const result = await env.DB.prepare(`
+      INSERT INTO waitlist (name, email, phone, source)
+      VALUES (?, ?, ?, ?)
+    `)
+    .bind(
+      name.trim(),
+      email.trim().toLowerCase(),
+      phone.trim(),
+      "website"
+    )
+    .run();
+
+    return jsonResponse({
+      success:  true,
+      message:  "You're on the waitlist!",
+      id:       result.meta.last_row_id
+    }, 201);
+
+  } catch (err) {
+    // Unique constraint = duplicate email
+    if (err.message && err.message.includes("UNIQUE")) {
+      return jsonResponse({
+        error: "This email is already on the waitlist"
+      }, 409);
+    }
+    console.error("D1 insert error:", err);
+    return jsonResponse({ error: "Failed to save entry" }, 500);
+  }
+}
+
+// ── GET /api/waitlist  (admin) ─────────────────────────────────
+async function handleList(url, env) {
+  const page  = parseInt(url.searchParams.get("page")  || "1");
+  const limit = parseInt(url.searchParams.get("limit") || "50");
+  const offset = (page - 1) * limit;
+
+  const [rows, count] = await Promise.all([
+    env.DB.prepare(`
+      SELECT id, name, email, phone, source, created_at
+      FROM waitlist
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all(),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM waitlist`).first()
+  ]);
+
+  return jsonResponse({
+    total:   count.total,
+    page,
+    limit,
+    entries: rows.results
+  });
+}
+
+// ── GET /api/waitlist/:id  (admin) ────────────────────────────
+async function handleGetOne(id, env) {
+  if (!id || isNaN(Number(id))) {
+    return jsonResponse({ error: "Invalid ID" }, 400);
+  }
+  const row = await env.DB.prepare(`
+    SELECT id, name, email, phone, source, created_at
+    FROM waitlist WHERE id = ?
+  `).bind(Number(id)).first();
+
+  if (!row) return jsonResponse({ error: "Entry not found" }, 404);
+  return jsonResponse(row);
+}
+
+// ── DELETE /api/waitlist/:id  (admin) ─────────────────────────
+async function handleDelete(id, env) {
+  if (!id || isNaN(Number(id))) {
+    return jsonResponse({ error: "Invalid ID" }, 400);
+  }
+  const existing = await env.DB.prepare(
+    "SELECT id FROM waitlist WHERE id = ?"
+  ).bind(Number(id)).first();
+
+  if (!existing) return jsonResponse({ error: "Entry not found" }, 404);
+
+  await env.DB.prepare(
+    "DELETE FROM waitlist WHERE id = ?"
+  ).bind(Number(id)).run();
+
+  return jsonResponse({ success: true, message: `Entry ${id} deleted` });
+}
+
+// ── Helpers ────────────────────────────────────────────────────
 function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
   });
@@ -124,5 +185,10 @@ function jsonResponse(data, status = 200) {
 
 function isAuthorized(request, env) {
   const auth = request.headers.get("Authorization") || "";
-  return auth.replace("Bearer ", "").trim() === env.ADMIN_KEY;
+  const key  = auth.replace("Bearer ", "").trim();
+  return key === env.ADMIN_KEY;
+}
+
+function unauthorized() {
+  return jsonResponse({ error: "Unauthorized" }, 401);
 }
