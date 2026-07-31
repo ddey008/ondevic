@@ -1,5 +1,5 @@
 // ── Replace this with your actual Worker URL ──────────────────
-const WORKER_URL = "https://labreach-worker.YOUR_SUBDOMAIN.workers.dev";
+const WORKER_URL = "https://ondevic.deepteshdey01.workers.dev";
 // ─────────────────────────────────────────────────────────────
 
 document.querySelectorAll("a[href^='#']").forEach((a) => {
