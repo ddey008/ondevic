@@ -38,7 +38,16 @@ export default {
     }
 
     // ── Initialise table if it doesn't exist yet ───────────────
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS waitlist (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, phone TEXT NOT NULL, source TEXT DEFAULT 'website', created_at TEXT DEFAULT (datetime('now')))").run();
+    // await env.DB.exec(`
+    //   CREATE TABLE IF NOT EXISTS waitlist (
+    //     id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    //     name      TEXT    NOT NULL,
+    //     email     TEXT    NOT NULL UNIQUE,
+    //     phone     TEXT    NOT NULL,
+    //     source    TEXT    DEFAULT 'website',
+    //     created_at TEXT   DEFAULT (datetime('now'))
+    //   )
+    // `);
 
     const url    = new URL(request.url);
     const path   = url.pathname;
