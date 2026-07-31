@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LabReach — Remote Lab Equipment Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #0b0e14;
+      --bg2:       #0f1319;
+      --bg3:       #141820;
+      --panel:     #181d27;
+      --border:    rgba(255,255,255,0.07);
+      --border2:   rgba(255,255,255,0.12);
+      --text:      #c8d0df;
+      --text-dim:  #5a6478;
+      --white:     #eef1f7;
+      --accent:    #00c2ff;
+      --accent2:   #0077b6;
+      --green:     #00e5a0;
+      --amber:     #f5a623;
+      --red:       #ff4d6d;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 998;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 48px;
+      height: 60px;
+      background: rgba(11,14,20,0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--white);
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: blink 2.4s ease-in-out infinite;
+    }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .btn-nav {
+      background: var(--accent) !important;
+      color: var(--bg) !important;
+      padding: 8px 20px;
+      border-radius: 3px;
+      font-weight: 600;
+      transition: opacity 0.2s !important;
+    }
+    .btn-nav:hover { opacity: 0.82 !important; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding-top: 60px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,194,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,194,255,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+    .hero-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 80px 60px 80px 80px;
+      position: relative;
+      z-index: 2;
+    }
+    .hero-tag {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+      animation: fadeUp 0.7s ease both;
+    }
+    h1 {
+      font-size: clamp(2.8rem, 5vw, 4.8rem);
+      font-weight: 600;
+      line-height: 1.08;
+      color: var(--white);
+      animation: fadeUp 0.7s 0.1s ease both;
+    }
+    h1 span { color: var(--accent); }
+    .hero-sub {
+      margin-top: 22px;
+      font-size: 0.9rem;
+      line-height: 1.8;
+      color: var(--text-dim);
+      max-width: 420px;
+      animation: fadeUp 0.7s 0.2s ease both;
+    }
+    .status-bar {
+      margin-top: 36px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      animation: fadeUp 0.7s 0.25s ease both;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+    }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .s-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .s-amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+    .hero-price-block {
+      margin-top: 40px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      animation: fadeUp 0.7s 0.3s ease both;
+    }
+    .price-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .price-main {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 3rem;
+      font-weight: 600;
+      color: var(--white);
+      line-height: 1;
+    }
+    .price-badge {
+      background: rgba(0,194,255,0.12);
+      border: 1px solid rgba(0,194,255,0.3);
+      color: var(--accent);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 3px;
+    }
+    .hero-cta {
+      margin-top: 36px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      animation: fadeUp 0.7s 0.35s ease both;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 13px 32px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: opacity 0.2s, transform 0.15s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-amazon {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: #ff9900;
+      color: #111;
+      border: none;
+      padding: 13px 22px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: opacity 0.2s, transform 0.15s;
+      text-decoration: none;
+    }
+    .btn-amazon:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-amazon svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border2);
+      padding: 13px 24px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── HERO RIGHT ── */
+    .hero-right {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+    .device-wrap {
+      position: relative;
+      animation: floatY 7s ease-in-out infinite;
+    }
+    .ftag {
+      position: absolute;
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 9px 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .ftag strong { display: block; font-size: 0.78rem; color: var(--white); margin-bottom: 2px; font-family: 'IBM Plex Sans', sans-serif; }
+    .ftag .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+    .ftag-1 { top: 40px;  right: -60px; animation: fadeUp 0.8s 0.5s ease both; }
+    .ftag-2 { bottom: 110px; left: -70px; animation: fadeUp 0.8s 0.7s ease both; }
+    .ftag-3 { top: 180px; right: -80px; animation: fadeUp 0.8s 0.9s ease both; }
+
+    /* ── STATUS STRIP ── */
+    .status-strip {
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 80px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .strip-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .strip-item strong { color: var(--white); font-size: 0.8rem; display: block; text-transform: none; letter-spacing: 0; font-family: 'IBM Plex Sans', sans-serif; }
+    .strip-icon { font-size: 1rem; }
+
+    /* ── FEATURES ── */
+    .features { padding: 100px 80px; }
+    .section-tag {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(2rem, 3.5vw, 3rem);
+      font-weight: 600;
+      color: var(--white);
+      line-height: 1.15;
+      margin-bottom: 60px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+    .feat-card {
+      background: var(--bg2);
+      padding: 36px 32px;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.25s;
+    }
+    .feat-card:hover { background: var(--panel); }
+    .feat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 0;
+      background: var(--accent);
+      transition: height 0.35s;
+    }
+    .feat-card:hover::before { height: 100%; }
+    .feat-num { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--text-dim); margin-bottom: 18px; letter-spacing: 0.12em; }
+    .feat-icon-lg { font-size: 1.6rem; margin-bottom: 16px; }
+    .feat-card h3 { font-size: 1rem; font-weight: 600; color: var(--white); margin-bottom: 10px; }
+    .feat-card p { font-size: 0.78rem; line-height: 1.7; color: var(--text-dim); }
+
+    /* ── DETAILS ── */
+    .details {
+      padding: 100px 80px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .details-text h2 { font-size: clamp(2rem, 3vw, 2.8rem); font-weight: 600; color: var(--white); margin-bottom: 16px; }
+    .details-text p { font-size: 0.8rem; line-height: 1.8; color: var(--text-dim); margin-bottom: 12px; }
+    .spec-table { width: 100%; margin-top: 32px; border-collapse: collapse; }
+    .spec-table tr { border-bottom: 1px solid var(--border); }
+    .spec-table td { padding: 12px 4px; font-size: 0.75rem; }
+    .spec-table td:first-child { font-family: 'IBM Plex Mono', monospace; color: var(--text-dim); width: 45%; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .spec-table td:last-child { color: var(--white); font-weight: 500; }
+    .details-visual {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      height: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .details-visual::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,194,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,194,255,0.04) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    .terminal {
+      position: relative;
+      z-index: 2;
+      background: rgba(11,14,20,0.95);
+      border: 1px solid var(--border2);
+      border-radius: 5px;
+      width: 310px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+    }
+    .terminal-bar {
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .t-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .t-red { background: var(--red); }
+    .t-amber { background: var(--amber); }
+    .t-green { background: var(--green); }
+    .terminal-title { color: var(--text-dim); font-size: 0.58rem; letter-spacing: 0.06em; margin-left: 4px; }
+    .terminal-body { padding: 16px 14px; line-height: 1.9; }
+    .t-line { display: block; }
+    .t-prompt { color: var(--accent); }
+    .t-cmd { color: var(--white); }
+    .t-out { color: var(--text-dim); }
+    .t-ok { color: var(--green); }
+    .t-warn { color: var(--amber); }
+    .t-cursor { display: inline-block; width: 7px; height: 13px; background: var(--accent); vertical-align: middle; animation: blink 1s step-end infinite; }
+
+    /* ── PRICING ── */
+    .pricing { padding: 100px 80px; }
+    .section-header { text-align: center; margin-bottom: 50px; }
+    .section-header h2 { font-size: clamp(2rem, 3vw, 2.8rem); font-weight: 600; color: var(--white); margin-top: 10px; }
+    .price-card-single {
+      max-width: 560px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .pc-header {
+      background: linear-gradient(135deg, rgba(0,194,255,0.1), rgba(0,119,182,0.06));
+      border-bottom: 1px solid var(--border2);
+      padding: 32px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .pc-name { font-size: 1.5rem; font-weight: 600; color: var(--white); margin-bottom: 4px; }
+    .pc-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+    .pc-price-block { text-align: right; }
+    .pc-price { font-family: 'IBM Plex Mono', monospace; font-size: 2.8rem; font-weight: 600; color: var(--white); line-height: 1; }
+    .pc-price sup { font-size: 1.2rem; vertical-align: top; margin-top: 6px; display: inline-block; }
+    .pc-price-note { font-size: 0.62rem; color: var(--text-dim); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+    .pc-body { padding: 32px 36px; }
+    .pc-features { list-style: none; margin-bottom: 28px; }
+    .pc-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--text);
+    }
+    .pc-feature::before { content: '▸'; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+    .pc-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    /* ── WAITLIST ── */
+    .waitlist {
+      padding: 100px 80px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: start;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+    }
+    .waitlist-left h2 { font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 600; color: var(--white); line-height: 1.1; margin-bottom: 16px; }
+    .waitlist-left h2 span { color: var(--accent); }
+    .waitlist-left > p { font-size: 0.8rem; line-height: 1.8; color: var(--text-dim); margin-bottom: 36px; }
+    .perks { list-style: none; }
+    .perk { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+    .perk-num {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--accent);
+      border: 1px solid rgba(0,194,255,0.3);
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 3px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .perk-text strong { display: block; font-size: 0.9rem; color: var(--white); margin-bottom: 3px; }
+    .perk-text p { font-size: 0.72rem; color: var(--text-dim); line-height: 1.6; }
+    .form-card {
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 40px 36px;
+      position: sticky;
+      top: 80px;
+    }
+    .form-card-header { margin-bottom: 28px; }
+    .form-card-header h3 { font-size: 1.3rem; font-weight: 600; color: var(--white); margin-bottom: 6px; }
+    .form-card-header p { font-size: 0.68rem; color: var(--text-dim); line-height: 1.6; font-family: 'IBM Plex Mono', monospace; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 7px;
+    }
+    .form-group input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      padding: 11px 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--white);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus { border-color: var(--accent); }
+    .form-group input::placeholder { color: var(--text-dim); }
+    .form-note { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 20px; }
+    .btn-submit {
+      width: 100%;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn-submit:hover { opacity: 0.85; }
+    .btn-submit:active { transform: scale(0.99); }
+    .success-msg { display: none; text-align: center; padding: 32px 0; }
+    .success-icon { font-size: 2rem; margin-bottom: 14px; }
+    .success-msg h4 { font-size: 1.3rem; font-weight: 600; color: var(--white); margin-bottom: 8px; }
+    .success-msg p { font-size: 0.7rem; color: var(--text-dim); line-height: 1.7; font-family: 'IBM Plex Mono', monospace; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--bg3);
+      border-top: 1px solid var(--border);
+      padding: 50px 80px 36px;
+    }
+    .footer-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; flex-wrap: wrap; gap: 24px; }
+    .footer-logo { font-family: 'IBM Plex Mono', monospace; font-size: 1rem; font-weight: 600; color: var(--white); letter-spacing: 0.06em; margin-bottom: 4px; }
+    .footer-tagline { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--text-dim); letter-spacing: 0.1em; }
+    .footer-links { display: flex; gap: 32px; flex-wrap: wrap; }
+    .footer-links a { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--accent); }
+    .footer-bottom { border-top: 1px solid var(--border); padding-top: 24px; display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--text-dim); flex-wrap: wrap; gap: 8px; }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes floatY {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-14px); }
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      nav { padding: 0 24px; }
+      .nav-links { gap: 14px; }
+      .hero { grid-template-columns: 1fr; }
+      .hero-left { padding: 60px 28px 36px; }
+      .hero-right { min-height: 340px; padding: 28px; }
+      .status-strip { padding: 20px 28px; }
+      .features { padding: 70px 28px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .details { grid-template-columns: 1fr; padding: 70px 28px; gap: 40px; }
+      .details-visual { height: 320px; }
+      .pricing { padding: 70px 28px; }
+      .waitlist { grid-template-columns: 1fr; padding: 70px 28px; gap: 40px; }
+      .form-card { position: static; padding: 28px 22px; }
+      footer { padding: 40px 28px 28px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-dot"></div>
+    LabReach
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#specs">Specs</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#waitlist" class="btn-nav">Join Waitlist</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="home">
+  <div class="hero-left">
+    <div class="hero-tag">// v1.0 — Early Access Now Open</div>
+    <h1>Control Your Lab<br><span>From Anywhere.</span></h1>
+    <p class="hero-sub">
+      LabReach is a remote controller for lab equipment — letting researchers connect to their instruments from home, power them on or off, and run operations without ever stepping foot in the lab.
+    </p>
+
+    <div class="status-bar">
+      <div class="status-pill"><div class="status-dot s-green"></div>AES-256 Encrypted</div>
+      <div class="status-pill"><div class="status-dot s-green"></div>Sub-50ms Latency</div>
+      <div class="status-pill"><div class="status-dot s-amber"></div>Beta · More Features Soon</div>
+    </div>
+
+    <div class="hero-price-block">
+      <div>
+        <div class="price-label">Waitlist Price</div>
+        <div class="price-main">$199</div>
+      </div>
+      <div class="price-badge">Early Access</div>
+    </div>
+
+    <div class="hero-cta">
+      <a href="#waitlist" class="btn-primary">Join the Waitlist</a>
+      <a href="https://www.amazon.com/dp/FAKE-ASIN-LABREACH" target="_blank" rel="noopener" class="btn-amazon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21.36 17.12c-2.86 2.12-7.01 3.25-10.59 3.25-5.01 0-9.52-1.85-12.93-4.93-.27-.24-.03-.57.29-.38 3.68 2.14 8.23 3.43 12.93 3.43 3.17 0 6.65-.66 9.86-2.02.49-.21.89.32.44.65z" fill="#111"/>
+          <path d="M22.54 15.76c-.36-.47-2.4-.22-3.32-.11-.28.03-.32-.21-.07-.39 1.63-1.14 4.3-.81 4.61-.43.31.39-.08 3.09-1.61 4.38-.24.2-.46.09-.36-.17.35-.86 1.11-2.81.75-3.28z" fill="#111"/>
+          <path d="M12 4C8.5 4 5.5 5.5 3.5 8l1.5 1c1.7-2 4.2-3.2 7-3.2 4.7 0 8.5 3.8 8.5 8.5 0 1.2-.2 2.3-.7 3.3l1.7.7c.6-1.3.9-2.6.9-4C22.5 8.4 17.7 4 12 4z" fill="#111"/>
+        </svg>
+        Buy on Amazon
+      </a>
+      <a href="#features" class="btn-ghost">Learn More</a>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="device-wrap">
+      <!-- Controller SVG -->
+      <svg viewBox="0 0 300 420" fill="none" xmlns="http://www.w3.org/2000/svg" width="280" height="390">
+        <rect x="30" y="30" width="240" height="360" rx="16" fill="#181d27" stroke="rgba(0,194,255,0.2)" stroke-width="1.5"/>
+        <rect x="30" y="30" width="240" height="50" rx="16" fill="#1e2433"/>
+        <rect x="30" y="56" width="240" height="24" fill="#1e2433"/>
+        <!-- screen -->
+        <rect x="50" y="96" width="200" height="120" rx="6" fill="#0b0e14" stroke="rgba(0,194,255,0.15)" stroke-width="1"/>
+        <rect x="62" y="108" width="60" height="5" rx="2" fill="rgba(0,194,255,0.65)"/>
+        <rect x="62" y="120" width="100" height="3" rx="2" fill="rgba(255,255,255,0.12)"/>
+        <rect x="62" y="130" width="80" height="3" rx="2" fill="rgba(255,255,255,0.07)"/>
+        <!-- status LED -->
+        <circle cx="224" cy="111" r="5" fill="#00e5a0"/>
+        <circle cx="224" cy="111" r="5" fill="#00e5a0" opacity="0.35">
+          <animate attributeName="r" from="5" to="12" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" from="0.35" to="0" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <!-- waveform -->
+        <polyline points="62,165 74,148 82,178 94,152 106,170 118,145 130,168 142,155 154,172 166,150 178,168 190,158 202,165 214,158 226,162 238,165" stroke="rgba(0,194,255,0.7)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- row 1 buttons -->
+        <rect x="56" y="236" width="56" height="36" rx="6" fill="#1e2433" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <rect x="122" y="236" width="56" height="36" rx="6" fill="rgba(0,194,255,0.15)" stroke="rgba(0,194,255,0.35)" stroke-width="1"/>
+        <rect x="188" y="236" width="56" height="36" rx="6" fill="#1e2433" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <text x="84" y="259" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono, monospace" font-size="9">OFF</text>
+        <text x="150" y="259" text-anchor="middle" fill="#00c2ff" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="600">ON</text>
+        <text x="216" y="259" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono, monospace" font-size="9">RST</text>
+        <!-- row 2 buttons -->
+        <rect x="56" y="286" width="56" height="36" rx="6" fill="#1e2433" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <rect x="122" y="286" width="56" height="36" rx="6" fill="#1e2433" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <rect x="188" y="286" width="56" height="36" rx="6" fill="rgba(245,166,35,0.15)" stroke="rgba(245,166,35,0.35)" stroke-width="1"/>
+        <text x="84" y="309" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono, monospace" font-size="9">LOG</text>
+        <text x="150" y="309" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono, monospace" font-size="9">SYNC</text>
+        <text x="216" y="309" text-anchor="middle" fill="#f5a623" font-family="IBM Plex Mono, monospace" font-size="9">DIAG</text>
+        <!-- d-pad -->
+        <circle cx="150" cy="360" r="28" fill="#1e2433" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <circle cx="150" cy="360" r="12" fill="#141820"/>
+        <polygon points="150,338 143,350 157,350" fill="rgba(255,255,255,0.18)"/>
+        <polygon points="150,382 143,370 157,370" fill="rgba(255,255,255,0.18)"/>
+        <polygon points="128,360 140,353 140,367" fill="rgba(255,255,255,0.18)"/>
+        <polygon points="172,360 160,353 160,367" fill="rgba(255,255,255,0.18)"/>
+        <!-- branding -->
+        <text x="150" y="65" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" letter-spacing="3">LABREACH</text>
+        <!-- LED row top -->
+        <circle cx="48" cy="55" r="4" fill="#00e5a0" opacity="0.85"/>
+        <circle cx="62" cy="55" r="4" fill="#f5a623" opacity="0.5"/>
+        <circle cx="76" cy="55" r="4" fill="rgba(255,255,255,0.1)"/>
+      </svg>
+
+      <div class="ftag ftag-1">
+        <strong>AES-256 Encrypted</strong>
+        <span class="dot" style="background:var(--green)"></span>Secure channel
+      </div>
+      <div class="ftag ftag-2">
+        <strong>Wi-Fi + Ethernet</strong>
+        <span class="dot" style="background:var(--accent)"></span>Dual connectivity
+      </div>
+      <div class="ftag ftag-3">
+        <strong>14 Instrument Types</strong>
+        <span class="dot" style="background:var(--amber)"></span>Supported
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATUS STRIP -->
+<div class="status-strip">
+  <div class="strip-item"><span class="strip-icon">⚡</span><div><strong>Remote Power Control</strong>on / off from anywhere</div></div>
+  <div class="strip-item"><span class="strip-icon">🔒</span><div><strong>Lab-Grade Security</strong>AES-256 + 2FA</div></div>
+  <div class="strip-item"><span class="strip-icon">📡</span><div><strong>Real-Time Telemetry</strong>live instrument status</div></div>
+  <div class="strip-item"><span class="strip-icon">🧪</span><div><strong>14+ Instruments</strong>centrifuges, PCR, spectro & more</div></div>
+</div>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-tag">// What it does</div>
+  <div class="section-title">Built for researchers<br>who never really leave the lab.</div>
+  <div class="features-grid">
+    <div class="feat-card">
+      <div class="feat-num">01 —</div>
+      <div class="feat-icon-lg">🔌</div>
+      <h3>Remote Power Control</h3>
+      <p>Power lab instruments on or off from your laptop or phone. No more rushing back to campus for a forgotten centrifuge.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">02 —</div>
+      <div class="feat-icon-lg">📊</div>
+      <h3>Live Status Dashboard</h3>
+      <p>See real-time instrument state — running, idle, error — with a web dashboard that updates every second.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">03 —</div>
+      <div class="feat-icon-lg">🔔</div>
+      <h3>Smart Alerts</h3>
+      <p>Get notified by email or SMS when a run completes, a temperature drifts, or a fault is detected.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">04 —</div>
+      <div class="feat-icon-lg">🗓️</div>
+      <h3>Scheduled Operations</h3>
+      <p>Queue startup and shutdown sequences in advance. Your instruments can be warmed up before you even arrive.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">05 —</div>
+      <div class="feat-icon-lg">🔐</div>
+      <h3>Multi-User Access Control</h3>
+      <p>Assign roles across your lab team. PIs get full control; students get scoped access. Full audit logs included.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">06 —</div>
+      <div class="feat-icon-lg">⚙️</div>
+      <h3>More Functions Coming</h3>
+      <p>Parameter adjustment, data retrieval, and protocol triggering are on the roadmap. Waitlist members shape what ships first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SPECS -->
+<section class="details" id="specs">
+  <div class="details-text">
+    <div class="section-tag">// Technical specs</div>
+    <h2>Engineered for the bench.</h2>
+    <p>LabReach connects to your existing lab network via Wi-Fi or Ethernet and communicates with instruments through a universal relay module — no instrument-specific firmware required.</p>
+    <p>A compact hardware hub installs in minutes. The rest is software.</p>
+    <table class="spec-table">
+      <tr><td>Connectivity</td><td>Wi-Fi 6 + Gigabit Ethernet</td></tr>
+      <tr><td>Security</td><td>AES-256, TLS 1.3, 2FA</td></tr>
+      <tr><td>Latency</td><td>&lt; 50 ms typical</td></tr>
+      <tr><td>Power Input</td><td>USB-C, 5V / 3A</td></tr>
+      <tr><td>Relay Output</td><td>4-channel, 10A per channel</td></tr>
+      <tr><td>Instruments</td><td>14+ categories supported</td></tr>
+      <tr><td>Platform</td><td>Web, iOS, Android</td></tr>
+      <tr><td>Dimensions</td><td>110 × 72 × 28 mm</td></tr>
+    </table>
+  </div>
+
+  <div class="details-visual">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="t-dot t-red"></div>
+        <div class="t-dot t-amber"></div>
+        <div class="t-dot t-green"></div>
+        <span class="terminal-title">labreach — live session</span>
+      </div>
+      <div class="terminal-body">
+        <span class="t-line"><span class="t-prompt">$</span> <span class="t-cmd">labreach connect --lab B204</span></span>
+        <span class="t-line t-ok">✓ Authenticated. Tunnel active.</span>
+        <span class="t-line">&nbsp;</span>
+        <span class="t-line"><span class="t-prompt">$</span> <span class="t-cmd">labreach status</span></span>
+        <span class="t-line t-out">› Centrifuge-01 &nbsp; <span class="t-ok">RUNNING</span> 4200rpm</span>
+        <span class="t-line t-out">› PCR-Cycler-02 &nbsp; <span class="t-ok">IDLE</span></span>
+        <span class="t-line t-out">› Spectro-03 &nbsp;&nbsp;&nbsp;&nbsp; <span class="t-warn">WARM-UP</span></span>
+        <span class="t-line t-out">› Incubator-01 &nbsp; <span class="t-ok">37.0°C ✓</span></span>
+        <span class="t-line">&nbsp;</span>
+        <span class="t-line"><span class="t-prompt">$</span> <span class="t-cmd">labreach off Centrifuge-01</span></span>
+        <span class="t-line t-ok">✓ Power-off command sent.</span>
+        <span class="t-line"><span class="t-prompt">$</span> <span class="t-cursor"></span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="section-header">
+    <div class="section-tag">// Pricing</div>
+    <h2>One device. One price.</h2>
+  </div>
+  <div class="price-card-single">
+    <div class="pc-header">
+      <div>
+        <div class="pc-name">LabReach Hub</div>
+        <div class="pc-label">// Remote Lab Controller</div>
+      </div>
+      <div class="pc-price-block">
+        <div class="pc-price"><sup>$</sup>199</div>
+        <div class="pc-price-note">Waitlist price · Retail $279</div>
+      </div>
+    </div>
+    <div class="pc-body">
+      <ul class="pc-features">
+        <li class="pc-feature">Remote power on/off for lab instruments</li>
+        <li class="pc-feature">Real-time instrument status dashboard</li>
+        <li class="pc-feature">Email & SMS alerts for run events and faults</li>
+        <li class="pc-feature">4-channel relay output, 10A per channel</li>
+        <li class="pc-feature">Multi-user access control + audit logs</li>
+        <li class="pc-feature">Web, iOS & Android apps included</li>
+        <li class="pc-feature">1-year hardware warranty</li>
+        <li class="pc-feature">Early access to upcoming features</li>
+      </ul>
+      <div class="pc-actions">
+        <a href="#waitlist" class="btn-primary">Join Waitlist</a>
+        <a href="https://www.amazon.com/dp/FAKE-ASIN-LABREACH" target="_blank" rel="noopener" class="btn-amazon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21.36 17.12c-2.86 2.12-7.01 3.25-10.59 3.25-5.01 0-9.52-1.85-12.93-4.93-.27-.24-.03-.57.29-.38 3.68 2.14 8.23 3.43 12.93 3.43 3.17 0 6.65-.66 9.86-2.02.49-.21.89.32.44.65z" fill="#111"/>
+            <path d="M22.54 15.76c-.36-.47-2.4-.22-3.32-.11-.28.03-.32-.21-.07-.39 1.63-1.14 4.3-.81 4.61-.43.31.39-.08 3.09-1.61 4.38-.24.2-.46.09-.36-.17.35-.86 1.11-2.81.75-3.28z" fill="#111"/>
+            <path d="M12 4C8.5 4 5.5 5.5 3.5 8l1.5 1c1.7-2 4.2-3.2 7-3.2 4.7 0 8.5 3.8 8.5 8.5 0 1.2-.2 2.3-.7 3.3l1.7.7c.6-1.3.9-2.6.9-4C22.5 8.4 17.7 4 12 4z" fill="#111"/>
+          </svg>
+          Buy on Amazon
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WAITLIST -->
+<section class="waitlist" id="waitlist">
+  <div class="waitlist-left">
+    <div class="section-tag">// Early Access</div>
+    <h2>Get early access<br>to <span>LabReach.</span></h2>
+    <p>Join the waitlist and be among the first researchers to control their lab equipment remotely. Waitlist members get a locked-in discount and priority hardware allocation.</p>
+    <ul class="perks">
+      <li class="perk">
+        <div class="perk-num">01</div>
+        <div class="perk-text">
+          <strong>Priority Allocation</strong>
+          <p>First in line when hardware ships.</p>
+        </div>
+      </li>
+      <li class="perk">
+        <div class="perk-num">02</div>
+        <div class="perk-text">
+          <strong>$80 Off Retail</strong>
+          <p>Waitlist price of $199 locked in permanently.</p>
+        </div>
+      </li>
+      <li class="perk">
+        <div class="perk-num">03</div>
+        <div class="perk-text">
+          <strong>Shape the Roadmap</strong>
+          <p>Your lab's needs built into the product first.</p>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="form-card">
+    <div id="form-wrap">
+      <div class="form-card-header">
+        <h3>Request Early Access</h3>
+        <p>// No payment required. We'll reach out when ready.</p>
+      </div>
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" placeholder="Dr. Jane Smith" autocomplete="name" />
+      </div>
+      <div class="form-group">
+        <label for="gmail">Gmail Address</label>
+        <input type="email" id="gmail" placeholder="you@gmail.com" autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label for="phone">Contact Number</label>
+        <input type="tel" id="phone" placeholder="+1 (555) 000-0000" autocomplete="tel" />
+      </div>
+      <p class="form-note">// We'll only contact you about LabReach. No spam. Unsubscribe anytime.</p>
+      <button class="btn-submit" id="submit-btn">Submit Request →</button>
+    </div>
+    <div class="success-msg" id="success-msg">
+      <div class="success-icon">✅</div>
+      <h4>You're on the list.</h4>
+      <p>// Request received. We'll reach out to your Gmail when LabReach is ready to ship.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-top">
+    <div>
+      <div class="footer-logo">LabReach</div>
+      <div class="footer-tagline">// Remote control for your lab.</div>
+    </div>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Docs</a>
+      <a href="#">Contact</a>
+      <a href="https://www.amazon.com/dp/FAKE-ASIN-LABREACH" target="_blank" rel="noopener">Amazon</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 LabReach Technologies, Inc.</span>
+    <span>// Built for scientists, by scientists.</span>
+  </div>
+</footer>
+
+
+
+<script src="main.js" defer></script>
+</body>
+</html>
