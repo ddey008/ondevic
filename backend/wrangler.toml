@@ -1,0 +1,8 @@
+name = "ondevic-database-worker"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding      = "DB"
+database_name = "ondevic"
+database_id  = "6153279b-44bc-41cb-981b-cdd588f28556"
